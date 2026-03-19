@@ -1,0 +1,6 @@
+.env
+commands.txt
+context.txt
+venv/
+__pycache__/
+*.pyc
