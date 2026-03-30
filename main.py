@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 import psycopg2
 from elasticsearch import Elasticsearch
+from typing import List
 
 app = FastAPI()
 
@@ -21,14 +22,21 @@ def create_index():
             body={
                 "mappings": {
                     "properties": {
-                        "name": {"type": "text"}
+                        "name": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword"
+                                }
+                            }
+                        }
                     }
                 }
             }
         )
         print("Index created")
     except Exception as e:
-        print("Index already exists or error:", e)
+        print("Index exists:", e)
 
 def index_skills():
     cur = conn.cursor()
@@ -51,11 +59,46 @@ def autocomplete(q: str):
         index="skills",
         body={
             "query": {
-                "match": {
-                    "name": q
+                "bool": {
+                    "should": [
+                        {
+                            "prefix": {
+                                "name.keyword": q.capitalize()
+                            }
+                        },
+                        {
+                            "fuzzy": {
+                                "name": {
+                                    "value": q,
+                                    "fuzziness": "AUTO"
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         }
     )
 
     return [hit["_source"]["name"] for hit in res["hits"]["hits"]]
+
+NORMALIZATION_MAP = {
+    "js": "JavaScript",
+    "javascript": "JavaScript",
+    "node": "Node.js",
+    "nodejs": "Node.js",
+    "reactjs": "React",
+    "react": "React",
+    "pytn" : "Python"
+}
+
+@app.post("/normalize")
+def normalize(skills: List[str]):
+    result = []
+
+    for s in skills:
+        cleaned = s.lower().strip()
+        normalized = NORMALIZATION_MAP.get(cleaned, s)
+        result.append(normalized)
+
+    return result
